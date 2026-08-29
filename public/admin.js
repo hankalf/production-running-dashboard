@@ -14,7 +14,8 @@
     { key: 'startCol', label: 'Start time', cls: 'role-start' },
     { key: 'endCol', label: 'End time', cls: 'role-end' },
     { key: 'machineCol', label: 'Machine / line', cls: 'role-machine' },
-    { key: 'titleCol', label: 'Item / product', cls: 'role-title' }
+    { key: 'titleCol', label: 'Item / product', cls: 'role-title' },
+    { key: 'allergenCol', label: 'Allergens ⚠', cls: 'role-allergen' }
   ];
   const PREVIEW_MAX = 500;
 
@@ -387,7 +388,7 @@
     if (scroll) { scroll.scrollTop = keepTop; scroll.scrollLeft = keepLeft; }
   }
 
-  /* ------------------------------------------------------ named cells */
+  /* -------------------------------------------------------- cell tags */
 
   const colLetter = (c) => {
     let s = '';
@@ -396,20 +397,22 @@
     return s;
   };
   const cellRef = (r, c) => colLetter(c) + (r + 1);
+  const TAG_COLORS = ['#f59e0b', '#8b5cf6', '#059669', '#2563eb', '#dc2626',
+    '#0891b2', '#d97706', '#db2777', '#65a30d', '#7c3aed'];
 
-  let pendingCell = null; // {r, c} awaiting a name
+  let armedTagId = null; // tag currently collecting cells
 
-  let cellsTimer = null;
-  function saveCellsSoon() {
-    clearTimeout(cellsTimer);
-    cellsTimer = setTimeout(async () => {
+  let tagsTimer = null;
+  function saveTagsSoon() {
+    clearTimeout(tagsTimer);
+    tagsTimer = setTimeout(async () => {
       try {
-        const body = await api('/api/cells', {
+        const body = await api('/api/tags', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cells: state.config.cells })
+          body: JSON.stringify({ tags: state.config.tags })
         });
-        state.config = body.config;
+        // Keep local (possibly newer) edits; just confirm the save.
         setStatus('mappingStatus', 'Saved — screens updated.', 'ok');
       } catch (err) {
         setStatus('mappingStatus', err.message, 'error');
@@ -422,99 +425,94 @@
     return String((g[r] || [])[c] ?? '');
   }
 
-  function openCellNamer(r, c) {
-    pendingCell = { r, c };
-    $('cellNamer').hidden = false;
-    $('cellNamerRef').textContent = cellRef(r, c);
-    const v = gridValue(r, c);
-    $('cellNamerValue').textContent = v ? `currently “${v}”` : 'currently empty';
-    $('cellNamerInput').value = '';
-    $('cellNamerInput').focus();
-    renderCellGrid();
-  }
-
-  function closeCellNamer() {
-    pendingCell = null;
-    $('cellNamer').hidden = true;
-    renderCellGrid();
-  }
-
-  function addPendingCell() {
-    if (!pendingCell) return;
-    const name = $('cellNamerInput').value.trim() || cellRef(pendingCell.r, pendingCell.c);
-    state.config.cells.push({
+  $('addTagBtn').addEventListener('click', () => {
+    const name = $('newTagName').value.trim();
+    if (!name) { $('newTagName').focus(); return; }
+    const tag = {
       id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
       name,
-      r: pendingCell.r,
-      c: pendingCell.c,
-      show: true
-    });
-    closeCellNamer();
-    saveCellsSoon();
+      color: TAG_COLORS[state.config.tags.length % TAG_COLORS.length],
+      show: true,
+      cells: []
+    };
+    state.config.tags.push(tag);
+    $('newTagName').value = '';
+    armedTagId = tag.id; // go straight into cell selection
+    saveTagsSoon();
     renderCells();
-  }
-
-  $('cellNamerAdd').addEventListener('click', addPendingCell);
-  $('cellNamerCancel').addEventListener('click', closeCellNamer);
-  $('cellNamerInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); addPendingCell(); }
-    if (e.key === 'Escape') closeCellNamer();
+  });
+  $('newTagName').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); $('addTagBtn').click(); }
   });
 
-  function renderCellList() {
-    const list = $('cellList');
+  $('pickDoneBtn').addEventListener('click', () => {
+    armedTagId = null;
+    renderCells();
+  });
+
+  function renderTagList() {
+    const list = $('tagList');
     list.innerHTML = '';
-    if (!state.config.cells.length) {
+    if (!state.config.tags.length) {
       const p = document.createElement('p');
       p.className = 'muted';
-      p.textContent = 'No tiles yet — open the sheet below and click a cell to add one.';
+      p.textContent = 'No tags yet — add one above, then click cells in the sheet to fill it.';
       list.appendChild(p);
       return;
     }
-    for (const cell of state.config.cells) {
+    state.config.tags.forEach((tag, idx) => {
       const row = document.createElement('div');
-      row.className = 'cell-row';
+      row.className = 'cell-row' + (armedTagId === tag.id ? ' armed' : '');
 
       const cb = document.createElement('input');
       cb.type = 'checkbox';
-      cb.title = 'Show this tile on screens';
-      cb.checked = cell.show !== false;
-      cb.addEventListener('change', () => { cell.show = cb.checked; saveCellsSoon(); });
+      cb.title = 'Show this card on screens';
+      cb.checked = tag.show !== false;
+      cb.addEventListener('change', () => { tag.show = cb.checked; saveTagsSoon(); });
       row.appendChild(cb);
+
+      const swatch = document.createElement('span');
+      swatch.className = 'tag-swatch';
+      swatch.style.background = tag.color;
+      row.appendChild(swatch);
 
       const name = document.createElement('input');
       name.type = 'text';
       name.className = 'cell-name';
-      name.value = cell.name;
+      name.value = tag.name;
       name.maxLength = 60;
       name.addEventListener('change', () => {
-        cell.name = name.value.trim() || cellRef(cell.r, cell.c);
-        saveCellsSoon();
+        tag.name = name.value.trim() || tag.name;
+        saveTagsSoon();
+        renderCells();
       });
       row.appendChild(name);
 
-      const ref = document.createElement('span');
-      ref.className = 'cell-ref';
-      ref.textContent = cellRef(cell.r, cell.c);
-      row.appendChild(ref);
+      const refs = document.createElement('span');
+      refs.className = 'cell-value';
+      refs.textContent = tag.cells.length
+        ? tag.cells.map((cell) => cellRef(cell.r, cell.c)).join(', ')
+        : 'no cells yet';
+      row.appendChild(refs);
 
-      const val = document.createElement('span');
-      val.className = 'cell-value';
-      const v = gridValue(cell.r, cell.c);
-      val.textContent = v || '(empty)';
-      row.appendChild(val);
+      const select = document.createElement('button');
+      select.className = 'btn small' + (armedTagId === tag.id ? ' primary' : '');
+      select.textContent = armedTagId === tag.id ? 'Done selecting' : 'Select cells';
+      select.addEventListener('click', () => {
+        armedTagId = armedTagId === tag.id ? null : tag.id;
+        renderCells();
+      });
+      row.appendChild(select);
 
-      // Order on the screens = order in this list.
-      const idx = state.config.cells.indexOf(cell);
       const up = document.createElement('button');
       up.className = 'btn small';
       up.textContent = '▲';
       up.title = 'Move up (earlier on screens)';
       up.disabled = idx === 0;
       up.addEventListener('click', () => {
-        const cells = state.config.cells;
-        [cells[idx - 1], cells[idx]] = [cells[idx], cells[idx - 1]];
-        saveCellsSoon();
+        const tags = state.config.tags;
+        [tags[idx - 1], tags[idx]] = [tags[idx], tags[idx - 1]];
+        saveTagsSoon();
         renderCells();
       });
       row.appendChild(up);
@@ -523,11 +521,11 @@
       down.className = 'btn small';
       down.textContent = '▼';
       down.title = 'Move down (later on screens)';
-      down.disabled = idx === state.config.cells.length - 1;
+      down.disabled = idx === state.config.tags.length - 1;
       down.addEventListener('click', () => {
-        const cells = state.config.cells;
-        [cells[idx], cells[idx + 1]] = [cells[idx + 1], cells[idx]];
-        saveCellsSoon();
+        const tags = state.config.tags;
+        [tags[idx], tags[idx + 1]] = [tags[idx + 1], tags[idx]];
+        saveTagsSoon();
         renderCells();
       });
       row.appendChild(down);
@@ -536,14 +534,15 @@
       del.className = 'btn small danger';
       del.textContent = 'Remove';
       del.addEventListener('click', () => {
-        state.config.cells = state.config.cells.filter((x) => x !== cell);
-        saveCellsSoon();
+        state.config.tags = state.config.tags.filter((x) => x !== tag);
+        if (armedTagId === tag.id) armedTagId = null;
+        saveTagsSoon();
         renderCells();
       });
       row.appendChild(del);
 
       list.appendChild(row);
-    }
+    });
   }
 
   function renderCellGrid() {
@@ -551,8 +550,18 @@
     const table = $('cellGrid');
     table.innerHTML = '';
     if (!s || !s.grid || !s.grid.length) return;
-    const named = new Map(state.config.cells.map((cell) => [cell.r + ':' + cell.c, cell]));
+
+    // First tag owning each cell.
+    const owner = new Map();
+    for (const tag of state.config.tags) {
+      for (const cell of tag.cells) {
+        const key = cell.r + ':' + cell.c;
+        if (!owner.has(key)) owner.set(key, tag);
+      }
+    }
+    const armed = state.config.tags.find((t) => t.id === armedTagId) || null;
     const cols = s.grid.reduce((m, r) => Math.max(m, r.length), 0);
+    table.classList.toggle('picking', !!armed);
 
     const thead = document.createElement('thead');
     const trh = document.createElement('tr');
@@ -574,22 +583,31 @@
       for (let c = 0; c < cols; c++) {
         const td = document.createElement('td');
         td.textContent = String(rowCells[c] ?? '');
-        const cell = named.get(r + ':' + c);
-        if (cell) {
-          td.className = 'named';
-          td.title = `Tile “${cell.name}” — click to remove`;
-        }
-        if (pendingCell && pendingCell.r === r && pendingCell.c === c) {
-          td.classList.add('pending');
+        const key = r + ':' + c;
+        const tag = owner.get(key);
+        if (tag) {
+          td.style.boxShadow = `inset 0 0 0 2px ${tag.color}`;
+          td.style.background = tag.color + '22';
+          td.title = `Tagged “${tag.name}”` +
+            (armed ? '' : ' — hit Select cells on a tag to change');
         }
         td.addEventListener('click', () => {
-          if (cell) {
-            state.config.cells = state.config.cells.filter((x) => x !== cell);
-            saveCellsSoon();
-            renderCells();
-          } else {
-            openCellNamer(r, c);
+          if (!armed) {
+            setStatus('mappingStatus', 'Hit “Select cells” on a tag first, then click cells.', '');
+            return;
           }
+          const inArmed = armed.cells.findIndex((x) => x.r === r && x.c === c);
+          if (inArmed >= 0) {
+            armed.cells.splice(inArmed, 1); // toggle off
+          } else {
+            // A cell belongs to one tag: steal it if another tag holds it.
+            if (tag && tag !== armed) {
+              tag.cells = tag.cells.filter((x) => !(x.r === r && x.c === c));
+            }
+            armed.cells.push({ r, c });
+          }
+          saveTagsSoon();
+          renderCells();
         });
         tr.appendChild(td);
       }
@@ -601,7 +619,10 @@
   function renderCells() {
     $('cellsCard').hidden = !(state.schedule && state.schedule.grid && state.schedule.grid.length);
     if ($('cellsCard').hidden) return;
-    renderCellList();
+    const armed = state.config.tags.find((t) => t.id === armedTagId);
+    $('pickHint').hidden = !armed;
+    if (armed) $('pickHintName').textContent = armed.name;
+    renderTagList();
     renderCellGrid();
   }
 

@@ -105,7 +105,22 @@
     return `${String(h).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
   }
 
+  // Allergen text for a row, or '' when the row carries no allergens.
+  // Blank and "none"-style values don't count as allergens.
+  function allergenText(row, mapping) {
+    if (!mapping.allergenCol) return '';
+    const v = String(row[mapping.allergenCol] ?? '').trim();
+    if (!v || /^(no|none|n\/a|na|nil|0|false|-+)$/i.test(v)) return '';
+    return v;
+  }
+
+  // True for values like "Y"/"Yes" that flag an allergen without naming it.
+  function isGenericFlag(v) {
+    return /^(y|yes|true|x|1|allergen|allergens)$/i.test(String(v).trim());
+  }
+
   window.ScheduleUtils = {
-    parseTime, parseDate, resolveDateFormat, todayStr, rowStatus, formatTimeCell
+    parseTime, parseDate, resolveDateFormat, todayStr, rowStatus, formatTimeCell,
+    allergenText, isGenericFlag
   };
 })();

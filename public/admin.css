@@ -193,6 +193,7 @@ label { font-size: 13.5px; font-weight: 600; display: flex; flex-direction: colu
 .chip.role-end { border-left-color: #dc2626; }
 .chip.role-machine { border-left-color: #2563eb; }
 .chip.role-title { border-left-color: #d97706; }
+.chip.role-allergen { border-left-color: #eab308; }
 
 .preview-toolbar {
   display: flex;
@@ -243,12 +244,14 @@ th.role-start, td.role-start { background: #e8f7f0; }
 th.role-end, td.role-end { background: #fdeeee; }
 th.role-machine, td.role-machine { background: #e9f0fd; }
 th.role-title, td.role-title { background: #fdf3e4; }
+th.role-allergen, td.role-allergen { background: #fefce8; }
 
 .role-tag.role-date { background: #8b5cf6; }
 .role-tag.role-start { background: #059669; }
 .role-tag.role-end { background: #dc2626; }
 .role-tag.role-machine { background: #2563eb; }
 .role-tag.role-title { background: #d97706; }
+.role-tag.role-allergen { background: #eab308; color: #1c1500; }
 
 #previewTable th.col-off .col-name { color: #b3bdc7; }
 #previewTable td.col-off { color: #b3bdc7; background: #f6f8fa; }
@@ -285,6 +288,30 @@ th.role-title, td.role-title { background: #fdf3e4; }
   padding: 8px 12px;
   background: #fafcfe;
 }
+
+.cell-row.armed { border-color: var(--accent); background: #fff8ec; }
+
+.tag-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  flex: 0 0 auto;
+}
+
+.pick-hint {
+  background: #fff8ec;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cell-grid.picking td { cursor: crosshair; }
 
 .cell-row .cell-name { max-width: 260px; font-weight: 600; }
 .cell-row .cell-ref {

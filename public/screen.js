@@ -133,22 +133,35 @@
     else renderTable(items);
   }
 
-  // Named-cell cards, in the order set in the admin panel.
+  // Tagged-cell cards, in the order set in the admin panel.
   function renderTiles() {
     const wrap = $('tiles');
-    const tiles = (data.tiles || []).filter((t) => String(t.value).trim() !== '');
+    const tiles = (data.tiles || []).filter((t) => (t.values || []).length);
     wrap.hidden = tiles.length === 0;
     wrap.innerHTML = '';
     for (const t of tiles) {
       const tile = document.createElement('div');
       tile.className = 'tile';
+      if (t.color) tile.style.borderTopColor = t.color;
       const label = document.createElement('div');
       label.className = 'tile-label';
       label.textContent = t.name;
-      const value = document.createElement('div');
-      value.className = 'tile-value';
-      value.textContent = t.value;
-      tile.append(label, value);
+      tile.appendChild(label);
+      if (t.values.length === 1) {
+        const value = document.createElement('div');
+        value.className = 'tile-value';
+        value.textContent = t.values[0];
+        tile.appendChild(value);
+      } else {
+        const listEl = document.createElement('div');
+        listEl.className = 'tile-values';
+        for (const v of t.values) {
+          const line = document.createElement('div');
+          line.textContent = v;
+          listEl.appendChild(line);
+        }
+        tile.appendChild(listEl);
+      }
       wrap.appendChild(tile);
     }
   }
@@ -185,7 +198,9 @@
     // Fields for the job cards: mapped title column (or first suitable
     // display column) as the headline, the rest as a meta line.
     const columns = data.columns.length ? data.columns : data.headers;
-    const skip = new Set([machineCol, mapping.dateCol, mapping.startCol, mapping.endCol]);
+    const skip = new Set([
+      machineCol, mapping.dateCol, mapping.startCol, mapping.endCol, mapping.allergenCol
+    ]);
     const titleCol =
       (mapping.titleCol && data.headers.includes(mapping.titleCol) && mapping.titleCol) ||
       columns.find((c) => !skip.has(c)) || columns[0];
@@ -252,6 +267,16 @@
         title.className = 'job-title';
         title.textContent = String(row[titleCol] ?? '');
         card.appendChild(title);
+
+        const allergen = U.allergenText(row, mapping);
+        if (allergen) {
+          card.classList.add('allergen');
+          const badge = document.createElement('div');
+          badge.className = 'allergen-badge';
+          badge.textContent = '⚠ ALLERGEN' +
+            (U.isGenericFlag(allergen) ? '' : ': ' + allergen.toUpperCase());
+          card.appendChild(badge);
+        }
 
         const metaBits = metaCols
           .map((c) => ({ c, v: String(row[c] ?? '').trim() }))
@@ -328,16 +353,27 @@
         }
         tr.appendChild(td);
       }
+      let statusTd = null;
       if (hasTimes) {
-        const td = document.createElement('td');
+        statusTd = document.createElement('td');
+        statusTd.className = 'status-cell';
         if (status !== 'none') {
           const chip = document.createElement('span');
           chip.className = 'status-chip ' + status;
           chip.textContent =
             status === 'running' ? 'Running' : status === 'upcoming' ? 'Up next' : 'Done';
-          td.appendChild(chip);
+          statusTd.appendChild(chip);
         }
-        tr.appendChild(td);
+        tr.appendChild(statusTd);
+      }
+      const allergen = U.allergenText(row, mapping);
+      if (allergen) {
+        tr.classList.add('allergen-row');
+        const chip = document.createElement('span');
+        chip.className = 'status-chip allergen';
+        chip.textContent = '⚠ ALLERGEN' +
+          (U.isGenericFlag(allergen) ? '' : ': ' + allergen.toUpperCase());
+        (statusTd || tr.lastChild).appendChild(chip);
       }
       tbody.appendChild(tr);
     }

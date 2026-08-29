@@ -55,20 +55,37 @@ const DEFAULT_CONFIG = {
     endCol: '',
     machineCol: '',
     titleCol: '',
+    allergenCol: '',
     dateFormat: 'auto'
   },
   displayColumns: [],
-  cells: [] // named single cells shown as info tiles: {id, name, r, c, show}
+  // User-defined tags: each has a name, colour and a set of picked cells,
+  // and renders as a card on the screens. {id, name, color, show, cells:[{r,c}]}
+  tags: []
 };
+
+const TAG_COLORS = ['#f59e0b', '#8b5cf6', '#059669', '#2563eb', '#dc2626',
+  '#0891b2', '#d97706', '#db2777', '#65a30d', '#7c3aed'];
 
 const getConfig = () => {
   const cfg = readJson('config.json', null);
   if (!cfg) return JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  // Migrate the older flat named-cell list into one tag per cell.
+  let tags = Array.isArray(cfg.tags) ? cfg.tags : [];
+  if (!tags.length && Array.isArray(cfg.cells) && cfg.cells.length) {
+    tags = cfg.cells.map((cell, i) => ({
+      id: cell.id,
+      name: cell.name,
+      color: TAG_COLORS[i % TAG_COLORS.length],
+      show: cell.show !== false,
+      cells: [{ r: cell.r, c: cell.c }]
+    }));
+  }
   return {
     branding: { ...DEFAULT_CONFIG.branding, ...(cfg.branding || {}) },
     mapping: { ...DEFAULT_CONFIG.mapping, ...(cfg.mapping || {}) },
     displayColumns: Array.isArray(cfg.displayColumns) ? cfg.displayColumns : [],
-    cells: Array.isArray(cfg.cells) ? cfg.cells : []
+    tags
   };
 };
 const setConfig = (cfg) => writeJson('config.json', cfg);
@@ -201,6 +218,9 @@ function guessMapping(headers, mapping) {
   if (!headers.includes(next.titleCol)) {
     next.titleCol = find(['product', 'item', 'job', 'description', 'sku', 'order']);
   }
+  if (!headers.includes(next.allergenCol)) {
+    next.allergenCol = find(['allergen', 'allergy']);
+  }
   return next;
 }
 
@@ -332,21 +352,24 @@ app.post('/api/mapping', requireAuth, (req, res) => {
   res.json({ config: cfg, schedule });
 });
 
-app.post('/api/cells', requireAuth, (req, res) => {
+app.post('/api/tags', requireAuth, (req, res) => {
   const cfg = getConfig();
-  if (!Array.isArray(req.body.cells)) {
-    return res.status(400).json({ error: 'cells must be an array' });
+  if (!Array.isArray(req.body.tags)) {
+    return res.status(400).json({ error: 'tags must be an array' });
   }
-  cfg.cells = req.body.cells
-    .filter((cell) => cell && Number.isInteger(cell.r) && Number.isInteger(cell.c)
-      && cell.r >= 0 && cell.c >= 0)
-    .slice(0, 50)
-    .map((cell) => ({
-      id: String(cell.id || crypto.randomUUID()),
-      name: String(cell.name || '').trim().slice(0, 60) || 'Untitled',
-      r: cell.r,
-      c: cell.c,
-      show: cell.show !== false
+  cfg.tags = req.body.tags
+    .filter((t) => t && typeof t === 'object')
+    .slice(0, 30)
+    .map((t, i) => ({
+      id: String(t.id || crypto.randomUUID()),
+      name: String(t.name || '').trim().slice(0, 60) || `Tag ${i + 1}`,
+      color: /^#[0-9a-f]{6}$/i.test(t.color) ? t.color : TAG_COLORS[i % TAG_COLORS.length],
+      show: t.show !== false,
+      cells: (Array.isArray(t.cells) ? t.cells : [])
+        .filter((cell) => cell && Number.isInteger(cell.r) && Number.isInteger(cell.c)
+          && cell.r >= 0 && cell.c >= 0)
+        .slice(0, 100)
+        .map((cell) => ({ r: cell.r, c: cell.c }))
     }));
   setConfig(cfg);
   broadcast('update');
@@ -451,15 +474,18 @@ app.get('/api/screen-data/:slug', (req, res) => {
   const columns = (screen.columns.length ? screen.columns : config.displayColumns)
     .filter((c) => !schedule || schedule.headers.includes(c));
 
-  // Named single cells -> info tiles, values re-read from the current sheet.
+  // Tagged cells -> cards, values re-read from the current sheet.
   const grid = (schedule && schedule.grid) || [];
   const tiles = screen.showTiles === false ? [] :
-    config.cells
-      .filter((cell) => cell.show !== false)
-      .map((cell) => ({
-        id: cell.id,
-        name: cell.name,
-        value: String((grid[cell.r] || [])[cell.c] ?? '')
+    config.tags
+      .filter((t) => t.show !== false)
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+        color: t.color,
+        values: t.cells
+          .map((cell) => String((grid[cell.r] || [])[cell.c] ?? '').trim())
+          .filter((v) => v !== '')
       }));
 
   res.json({
