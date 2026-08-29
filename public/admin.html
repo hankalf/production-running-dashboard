@@ -76,6 +76,34 @@
             <table id="previewTable" class="select-grid"></table>
           </div>
         </div>
+
+        <div class="card" id="cellsCard" hidden>
+          <h2>Info tiles from single cells <span class="optional">(optional)</span></h2>
+          <p class="hint">Pick any individual cell from the sheet — a shift note, a target, a
+             supervisor name — give it a name, and it appears as a card at the top of the
+             screens. Use ▲▼ to set the order the cards appear in; the value is re-read
+             from the same cell every time you upload.</p>
+
+          <div id="cellNamer" class="cell-namer" hidden>
+            <span>Name for cell <strong id="cellNamerRef"></strong>
+              (<span id="cellNamerValue" class="muted"></span>):</span>
+            <input type="text" id="cellNamerInput" maxlength="60"
+                   placeholder="e.g. Today's target">
+            <button id="cellNamerAdd" class="btn primary small" type="button">Add tile</button>
+            <button id="cellNamerCancel" class="btn small" type="button">Cancel</button>
+          </div>
+
+          <div id="cellList" class="cell-list"></div>
+
+          <details id="cellPickerDetails">
+            <summary class="btn">Open the sheet to pick a cell</summary>
+            <p class="hint" style="margin-top:10px">Click any cell below to name it.
+               Cells already used as tiles are highlighted — click one to remove it.</p>
+            <div class="table-scroll tall">
+              <table id="cellGrid" class="cell-grid"></table>
+            </div>
+          </details>
+        </div>
       </section>
 
       <!-- ============================================== Screens tab -->

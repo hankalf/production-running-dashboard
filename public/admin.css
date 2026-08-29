@@ -255,6 +255,85 @@ th.role-title, td.role-title { background: #fdf3e4; }
 #previewTable tr.row-off td { color: #b3bdc7; background: #f6f8fa; text-decoration: line-through; }
 #previewTable tr.row-off td.row-check { text-decoration: none; }
 
+/* --------------------------------------------------------- named cells */
+
+.optional { color: var(--muted); font-weight: 500; font-size: 14px; }
+
+.cell-namer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: #fff8ec;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  font-size: 14px;
+}
+
+.cell-namer input { width: 240px; }
+
+.cell-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+
+.cell-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #fafcfe;
+}
+
+.cell-row .cell-name { max-width: 260px; font-weight: 600; }
+.cell-row .cell-ref {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  background: #eef2f6;
+  border-radius: 5px;
+  padding: 3px 8px;
+}
+.cell-row .cell-value {
+  flex: 1;
+  color: var(--muted);
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#cellPickerDetails summary { display: inline-block; cursor: pointer; list-style: none; }
+#cellPickerDetails summary::-webkit-details-marker { display: none; }
+#cellPickerDetails[open] summary { background: var(--accent); color: #1a1000; }
+
+.cell-grid { border-collapse: collapse; font-size: 12px; }
+.cell-grid th {
+  background: #e6ebf1;
+  font-weight: 700;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  text-align: center;
+  min-width: 34px;
+}
+.cell-grid tbody th { position: static; }
+.cell-grid td {
+  border: 1px solid var(--line);
+  padding: 4px 8px;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  background: #fff;
+}
+.cell-grid td:hover { background: #fff3da; }
+.cell-grid td.named { background: #fdeecb; box-shadow: inset 0 0 0 2px var(--accent); font-weight: 700; }
+.cell-grid td.pending { background: #fff3da; box-shadow: inset 0 0 0 2px var(--accent); }
+
 /* ------------------------------------------------------------- screens */
 
 .screen-card { display: flex; flex-direction: column; gap: 14px; }

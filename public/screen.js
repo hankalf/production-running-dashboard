@@ -103,6 +103,7 @@
 
     applyBranding(data.branding);
     $('screenName').textContent = data.screen.name;
+    renderTiles();
     $('updatedLine').textContent = data.uploadedAt
       ? `Schedule: ${data.filename || 'uploaded'} — updated ${new Date(data.uploadedAt).toLocaleString()}`
       : '';
@@ -130,6 +131,26 @@
       layout === 'machines' || (layout !== 'table' && data.mapping.machineCol);
     if (useMachines) renderMachines(items);
     else renderTable(items);
+  }
+
+  // Named-cell cards, in the order set in the admin panel.
+  function renderTiles() {
+    const wrap = $('tiles');
+    const tiles = (data.tiles || []).filter((t) => String(t.value).trim() !== '');
+    wrap.hidden = tiles.length === 0;
+    wrap.innerHTML = '';
+    for (const t of tiles) {
+      const tile = document.createElement('div');
+      tile.className = 'tile';
+      const label = document.createElement('div');
+      label.className = 'tile-label';
+      label.textContent = t.name;
+      const value = document.createElement('div');
+      value.className = 'tile-value';
+      value.textContent = t.value;
+      tile.append(label, value);
+      wrap.appendChild(tile);
+    }
   }
 
   /* ------------------------------------------- machine columns layout */

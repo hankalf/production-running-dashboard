@@ -57,7 +57,8 @@ const DEFAULT_CONFIG = {
     titleCol: '',
     dateFormat: 'auto'
   },
-  displayColumns: []
+  displayColumns: [],
+  cells: [] // named single cells shown as info tiles: {id, name, r, c, show}
 };
 
 const getConfig = () => {
@@ -66,7 +67,8 @@ const getConfig = () => {
   return {
     branding: { ...DEFAULT_CONFIG.branding, ...(cfg.branding || {}) },
     mapping: { ...DEFAULT_CONFIG.mapping, ...(cfg.mapping || {}) },
-    displayColumns: Array.isArray(cfg.displayColumns) ? cfg.displayColumns : []
+    displayColumns: Array.isArray(cfg.displayColumns) ? cfg.displayColumns : [],
+    cells: Array.isArray(cfg.cells) ? cfg.cells : []
   };
 };
 const setConfig = (cfg) => writeJson('config.json', cfg);
@@ -168,7 +170,21 @@ function parseWorkbookFile(filePath, sheetName, headerRow) {
     headers.forEach((h, c) => { row[h] = normCell(cells[c]); });
     rows.push(row);
   }
-  return { sheetNames, sheet, headers, rows, headerRow: headerIdx, sheetRowCount: aoa.length };
+
+  // Raw cell grid (capped) so single cells can be picked and named in
+  // the admin, and their values re-read on every upload.
+  const gridCols = Math.min(
+    aoa.reduce((m, r) => Math.max(m, r.length), 0), 40);
+  const grid = aoa.slice(0, 200).map((r) => {
+    const out = [];
+    for (let c = 0; c < gridCols; c++) out.push(normCell(r[c]));
+    return out;
+  });
+
+  return {
+    sheetNames, sheet, headers, rows, grid,
+    headerRow: headerIdx, sheetRowCount: aoa.length
+  };
 }
 
 // Guess column roles from header names after an upload.
@@ -316,6 +332,27 @@ app.post('/api/mapping', requireAuth, (req, res) => {
   res.json({ config: cfg, schedule });
 });
 
+app.post('/api/cells', requireAuth, (req, res) => {
+  const cfg = getConfig();
+  if (!Array.isArray(req.body.cells)) {
+    return res.status(400).json({ error: 'cells must be an array' });
+  }
+  cfg.cells = req.body.cells
+    .filter((cell) => cell && Number.isInteger(cell.r) && Number.isInteger(cell.c)
+      && cell.r >= 0 && cell.c >= 0)
+    .slice(0, 50)
+    .map((cell) => ({
+      id: String(cell.id || crypto.randomUUID()),
+      name: String(cell.name || '').trim().slice(0, 60) || 'Untitled',
+      r: cell.r,
+      c: cell.c,
+      show: cell.show !== false
+    }));
+  setConfig(cfg);
+  broadcast('update');
+  res.json({ config: cfg });
+});
+
 app.post('/api/branding', requireAuth, upload.single('logo'), (req, res) => {
   const cfg = getConfig();
   const b = cfg.branding;
@@ -362,6 +399,7 @@ app.post('/api/screens', requireAuth, (req, res) => {
     layout: 'auto',
     todayOnly: true,
     hideCompleted: false,
+    showTiles: true,
     createdAt: new Date().toISOString()
   };
   screens.push(screen);
@@ -382,6 +420,7 @@ app.put('/api/screens/:id', requireAuth, (req, res) => {
   if (['auto', 'machines', 'table'].includes(b.layout)) screen.layout = b.layout;
   if (b.todayOnly !== undefined) screen.todayOnly = !!b.todayOnly;
   if (b.hideCompleted !== undefined) screen.hideCompleted = !!b.hideCompleted;
+  if (b.showTiles !== undefined) screen.showTiles = !!b.showTiles;
   setScreens(screens);
   broadcast('update');
   res.json({ screen, screens });
@@ -412,6 +451,17 @@ app.get('/api/screen-data/:slug', (req, res) => {
   const columns = (screen.columns.length ? screen.columns : config.displayColumns)
     .filter((c) => !schedule || schedule.headers.includes(c));
 
+  // Named single cells -> info tiles, values re-read from the current sheet.
+  const grid = (schedule && schedule.grid) || [];
+  const tiles = screen.showTiles === false ? [] :
+    config.cells
+      .filter((cell) => cell.show !== false)
+      .map((cell) => ({
+        id: cell.id,
+        name: cell.name,
+        value: String((grid[cell.r] || [])[cell.c] ?? '')
+      }));
+
   res.json({
     branding: config.branding,
     mapping: config.mapping,
@@ -419,6 +469,7 @@ app.get('/api/screen-data/:slug', (req, res) => {
     columns,
     headers: schedule ? schedule.headers : [],
     rows,
+    tiles,
     uploadedAt: schedule ? schedule.uploadedAt : null,
     filename: schedule ? schedule.filename : null
   });

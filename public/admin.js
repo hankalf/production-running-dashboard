@@ -245,10 +245,12 @@
     }
     hp.value = String(s.headerRow);
 
-    if (!has) return;
-    $('mapDateFormat').value = state.config.mapping.dateFormat || 'auto';
-    renderChips();
-    renderGrid();
+    if (has) {
+      $('mapDateFormat').value = state.config.mapping.dateFormat || 'auto';
+      renderChips();
+      renderGrid();
+    }
+    renderCells();
   }
 
   function renderSummary() {
@@ -383,6 +385,224 @@
 
     renderSummary();
     if (scroll) { scroll.scrollTop = keepTop; scroll.scrollLeft = keepLeft; }
+  }
+
+  /* ------------------------------------------------------ named cells */
+
+  const colLetter = (c) => {
+    let s = '';
+    c += 1;
+    while (c > 0) { c -= 1; s = String.fromCharCode(65 + (c % 26)) + s; c = Math.floor(c / 26); }
+    return s;
+  };
+  const cellRef = (r, c) => colLetter(c) + (r + 1);
+
+  let pendingCell = null; // {r, c} awaiting a name
+
+  let cellsTimer = null;
+  function saveCellsSoon() {
+    clearTimeout(cellsTimer);
+    cellsTimer = setTimeout(async () => {
+      try {
+        const body = await api('/api/cells', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cells: state.config.cells })
+        });
+        state.config = body.config;
+        setStatus('mappingStatus', 'Saved — screens updated.', 'ok');
+      } catch (err) {
+        setStatus('mappingStatus', err.message, 'error');
+      }
+    }, 500);
+  }
+
+  function gridValue(r, c) {
+    const g = (state.schedule && state.schedule.grid) || [];
+    return String((g[r] || [])[c] ?? '');
+  }
+
+  function openCellNamer(r, c) {
+    pendingCell = { r, c };
+    $('cellNamer').hidden = false;
+    $('cellNamerRef').textContent = cellRef(r, c);
+    const v = gridValue(r, c);
+    $('cellNamerValue').textContent = v ? `currently “${v}”` : 'currently empty';
+    $('cellNamerInput').value = '';
+    $('cellNamerInput').focus();
+    renderCellGrid();
+  }
+
+  function closeCellNamer() {
+    pendingCell = null;
+    $('cellNamer').hidden = true;
+    renderCellGrid();
+  }
+
+  function addPendingCell() {
+    if (!pendingCell) return;
+    const name = $('cellNamerInput').value.trim() || cellRef(pendingCell.r, pendingCell.c);
+    state.config.cells.push({
+      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+      name,
+      r: pendingCell.r,
+      c: pendingCell.c,
+      show: true
+    });
+    closeCellNamer();
+    saveCellsSoon();
+    renderCells();
+  }
+
+  $('cellNamerAdd').addEventListener('click', addPendingCell);
+  $('cellNamerCancel').addEventListener('click', closeCellNamer);
+  $('cellNamerInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addPendingCell(); }
+    if (e.key === 'Escape') closeCellNamer();
+  });
+
+  function renderCellList() {
+    const list = $('cellList');
+    list.innerHTML = '';
+    if (!state.config.cells.length) {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = 'No tiles yet — open the sheet below and click a cell to add one.';
+      list.appendChild(p);
+      return;
+    }
+    for (const cell of state.config.cells) {
+      const row = document.createElement('div');
+      row.className = 'cell-row';
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.title = 'Show this tile on screens';
+      cb.checked = cell.show !== false;
+      cb.addEventListener('change', () => { cell.show = cb.checked; saveCellsSoon(); });
+      row.appendChild(cb);
+
+      const name = document.createElement('input');
+      name.type = 'text';
+      name.className = 'cell-name';
+      name.value = cell.name;
+      name.maxLength = 60;
+      name.addEventListener('change', () => {
+        cell.name = name.value.trim() || cellRef(cell.r, cell.c);
+        saveCellsSoon();
+      });
+      row.appendChild(name);
+
+      const ref = document.createElement('span');
+      ref.className = 'cell-ref';
+      ref.textContent = cellRef(cell.r, cell.c);
+      row.appendChild(ref);
+
+      const val = document.createElement('span');
+      val.className = 'cell-value';
+      const v = gridValue(cell.r, cell.c);
+      val.textContent = v || '(empty)';
+      row.appendChild(val);
+
+      // Order on the screens = order in this list.
+      const idx = state.config.cells.indexOf(cell);
+      const up = document.createElement('button');
+      up.className = 'btn small';
+      up.textContent = '▲';
+      up.title = 'Move up (earlier on screens)';
+      up.disabled = idx === 0;
+      up.addEventListener('click', () => {
+        const cells = state.config.cells;
+        [cells[idx - 1], cells[idx]] = [cells[idx], cells[idx - 1]];
+        saveCellsSoon();
+        renderCells();
+      });
+      row.appendChild(up);
+
+      const down = document.createElement('button');
+      down.className = 'btn small';
+      down.textContent = '▼';
+      down.title = 'Move down (later on screens)';
+      down.disabled = idx === state.config.cells.length - 1;
+      down.addEventListener('click', () => {
+        const cells = state.config.cells;
+        [cells[idx], cells[idx + 1]] = [cells[idx + 1], cells[idx]];
+        saveCellsSoon();
+        renderCells();
+      });
+      row.appendChild(down);
+
+      const del = document.createElement('button');
+      del.className = 'btn small danger';
+      del.textContent = 'Remove';
+      del.addEventListener('click', () => {
+        state.config.cells = state.config.cells.filter((x) => x !== cell);
+        saveCellsSoon();
+        renderCells();
+      });
+      row.appendChild(del);
+
+      list.appendChild(row);
+    }
+  }
+
+  function renderCellGrid() {
+    const s = state.schedule;
+    const table = $('cellGrid');
+    table.innerHTML = '';
+    if (!s || !s.grid || !s.grid.length) return;
+    const named = new Map(state.config.cells.map((cell) => [cell.r + ':' + cell.c, cell]));
+    const cols = s.grid.reduce((m, r) => Math.max(m, r.length), 0);
+
+    const thead = document.createElement('thead');
+    const trh = document.createElement('tr');
+    trh.appendChild(document.createElement('th'));
+    for (let c = 0; c < cols; c++) {
+      const th = document.createElement('th');
+      th.textContent = colLetter(c);
+      trh.appendChild(th);
+    }
+    thead.appendChild(trh);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    s.grid.forEach((rowCells, r) => {
+      const tr = document.createElement('tr');
+      const th = document.createElement('th');
+      th.textContent = r + 1;
+      tr.appendChild(th);
+      for (let c = 0; c < cols; c++) {
+        const td = document.createElement('td');
+        td.textContent = String(rowCells[c] ?? '');
+        const cell = named.get(r + ':' + c);
+        if (cell) {
+          td.className = 'named';
+          td.title = `Tile “${cell.name}” — click to remove`;
+        }
+        if (pendingCell && pendingCell.r === r && pendingCell.c === c) {
+          td.classList.add('pending');
+        }
+        td.addEventListener('click', () => {
+          if (cell) {
+            state.config.cells = state.config.cells.filter((x) => x !== cell);
+            saveCellsSoon();
+            renderCells();
+          } else {
+            openCellNamer(r, c);
+          }
+        });
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+  }
+
+  function renderCells() {
+    $('cellsCard').hidden = !(state.schedule && state.schedule.grid && state.schedule.grid.length);
+    if ($('cellsCard').hidden) return;
+    renderCellList();
+    renderCellGrid();
   }
 
   /* ---------------------------------------------------------- screens */
@@ -553,6 +773,15 @@
     doneCb.addEventListener('change', () => saveScreen(screen.id, { hideCompleted: doneCb.checked }));
     doneLabel.append(doneCb, document.createTextNode(' Hide finished runs'));
     grid.appendChild(doneLabel);
+
+    const tilesLabel = document.createElement('label');
+    tilesLabel.className = 'check-label';
+    const tilesCb = document.createElement('input');
+    tilesCb.type = 'checkbox';
+    tilesCb.checked = screen.showTiles !== false;
+    tilesCb.addEventListener('change', () => saveScreen(screen.id, { showTiles: tilesCb.checked }));
+    tilesLabel.append(tilesCb, document.createTextNode(' Show info tiles'));
+    grid.appendChild(tilesLabel);
 
     card.appendChild(grid);
 

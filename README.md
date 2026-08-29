@@ -15,6 +15,11 @@ uploaded — no touching the TVs.
 - **Screen fleet** — create one entry per physical screen (e.g. *Packing Line 1*,
   *Goods In*). Each gets its own URL to open on that TV. Screens can be filtered
   to a line/area column so each one only shows what's relevant there.
+- **Info cards from single cells** — pick any individual cell off the sheet
+  (a shift note, a daily target, a supervisor name), give it a name, and it
+  shows as a card across the top of the screens. You choose which cards show
+  and their order in the admin, and each card's value is re-read from the same
+  cell on every upload.
 - **Machine board** — when a machine/line column is mapped, screens show one
   column per machine with that machine's jobs listed by time: the job running
   right now is highlighted green, upcoming ones are marked **Queued**, and
