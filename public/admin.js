@@ -1,10 +1,25 @@
-/* Admin panel: upload the schedule, map columns, manage the screen fleet
- * and branding. Talks to the JSON API in server.js. */
+/* Admin panel: upload the schedule, tag columns directly on the sheet
+ * preview, pick which columns/rows show on screens, manage the screen
+ * fleet and branding. Talks to the JSON API in server.js. */
 (function () {
   'use strict';
 
   const $ = (id) => document.getElementById(id);
   let state = { config: null, screens: [], schedule: null };
+
+  // Column roles the dashboard understands. Applied by clicking a chip,
+  // then clicking a column in the preview grid.
+  const ROLES = [
+    { key: 'dateCol', label: 'Date', cls: 'role-date' },
+    { key: 'startCol', label: 'Start time', cls: 'role-start' },
+    { key: 'endCol', label: 'End time', cls: 'role-end' },
+    { key: 'machineCol', label: 'Machine / line', cls: 'role-machine' },
+    { key: 'titleCol', label: 'Item / product', cls: 'role-title' }
+  ];
+  const PREVIEW_MAX = 500;
+
+  let armedRole = null;          // role key currently being "painted"
+  let excluded = new Set();      // row indices hidden from screens
 
   /* -------------------------------------------------------------- api */
 
@@ -21,7 +36,7 @@
     const el = $(id);
     el.textContent = text;
     el.className = 'status-line' + (cls ? ' ' + cls : '');
-    if (text) setTimeout(() => { if (el.textContent === text) el.textContent = ''; }, 5000);
+    if (text) setTimeout(() => { if (el.textContent === text) el.textContent = ''; }, 4000);
   }
 
   /* ------------------------------------------------------------ login */
@@ -60,16 +75,16 @@
 
   /* ----------------------------------------------------------- upload */
 
-  $('uploadBtn').addEventListener('click', async () => {
-    const file = $('fileInput').files[0];
-    if (!file) return setStatus('uploadStatus', 'Choose a file first.', 'error');
+  async function uploadFile(file) {
+    if (!file) return;
     const form = new FormData();
     form.append('file', file);
-    setStatus('uploadStatus', 'Uploading…');
+    setStatus('uploadStatus', `Uploading “${file.name}”…`);
     try {
       const body = await api('/api/upload', { method: 'POST', body: form });
       state.schedule = body.schedule;
       state.config = body.config;
+      excluded = new Set(body.schedule.excluded || []);
       setStatus('uploadStatus',
         `Loaded ${body.schedule.rows.length} rows from “${body.schedule.filename}”. All screens updated.`, 'ok');
       renderSchedule();
@@ -77,135 +92,298 @@
     } catch (err) {
       setStatus('uploadStatus', err.message, 'error');
     }
-  });
+  }
 
-  $('sheetPicker').addEventListener('change', async () => {
+  const dropZone = $('dropZone');
+  $('browseBtn').addEventListener('click', () => $('fileInput').click());
+  $('fileInput').addEventListener('change', () => {
+    uploadFile($('fileInput').files[0]);
+    $('fileInput').value = '';
+  });
+  ['dragenter', 'dragover'].forEach((ev) =>
+    dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((ev) =>
+    dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.remove('over'); }));
+  dropZone.addEventListener('drop', (e) => uploadFile(e.dataTransfer.files[0]));
+
+  async function reparse() {
+    const headerVal = $('headerRowPicker').value;
     try {
       const body = await api('/api/select-sheet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sheet: $('sheetPicker').value })
+        body: JSON.stringify({
+          sheet: $('sheetPicker').value,
+          headerRow: headerVal === '' ? null : Number(headerVal)
+        })
       });
       state.schedule = body.schedule;
       state.config = body.config;
+      excluded = new Set(body.schedule.excluded || []);
       renderSchedule();
       renderScreens();
     } catch (err) {
       setStatus('uploadStatus', err.message, 'error');
     }
-  });
-
-  /* ---------------------------------------------------------- mapping */
-
-  function fillColumnSelect(select, value, allowNone) {
-    select.innerHTML = '';
-    if (allowNone !== false) {
-      const opt = document.createElement('option');
-      opt.value = '';
-      opt.textContent = '— none —';
-      select.appendChild(opt);
-    }
-    for (const h of state.schedule ? state.schedule.headers : []) {
-      const opt = document.createElement('option');
-      opt.value = h;
-      opt.textContent = h;
-      select.appendChild(opt);
-    }
-    select.value = value || '';
   }
+  $('sheetPicker').addEventListener('change', () => {
+    $('headerRowPicker').value = ''; // new sheet: back to auto-detect
+    reparse();
+  });
+  $('headerRowPicker').addEventListener('change', reparse);
+
+  /* ------------------------------------------------- save view setup */
+
+  let saveTimer = null;
+  function saveViewSoon() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      try {
+        const body = await api('/api/mapping', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mapping: { ...state.config.mapping, dateFormat: $('mapDateFormat').value },
+            displayColumns: state.config.displayColumns,
+            excluded: [...excluded]
+          })
+        });
+        state.config = body.config;
+        if (body.schedule) state.schedule = body.schedule;
+        setStatus('mappingStatus', 'Saved — screens updated.', 'ok');
+      } catch (err) {
+        setStatus('mappingStatus', err.message, 'error');
+      }
+    }, 500);
+  }
+
+  $('mapDateFormat').addEventListener('change', saveViewSoon);
+
+  /* ------------------------------------------------------ role chips */
+
+  function roleFor(header) {
+    return ROLES.find((r) => state.config.mapping[r.key] === header) || null;
+  }
+
+  function renderChips() {
+    const wrap = $('roleChips');
+    wrap.innerHTML = '';
+    for (const role of ROLES) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = `chip ${role.cls}` + (armedRole === role.key ? ' armed' : '');
+      const assigned = state.config.mapping[role.key];
+      chip.innerHTML = '';
+      const name = document.createElement('span');
+      name.textContent = role.label;
+      chip.appendChild(name);
+      const target = document.createElement('span');
+      target.className = 'chip-target';
+      target.textContent = assigned ? `→ ${assigned}` : 'click, then click a column';
+      chip.appendChild(target);
+      chip.addEventListener('click', () => {
+        armedRole = armedRole === role.key ? null : role.key;
+        renderChips();
+        $('previewTable').classList.toggle('painting', !!armedRole);
+      });
+      wrap.appendChild(chip);
+    }
+  }
+
+  function assignRole(header) {
+    const m = state.config.mapping;
+    const role = armedRole;
+    if (!role) return false;
+    // Clicking the column that already has this role removes it.
+    m[role] = m[role] === header ? '' : header;
+    // A column can hold only one role.
+    for (const r of ROLES) {
+      if (r.key !== role && m[r.key] === header && m[role] === header) m[r.key] = '';
+    }
+    armedRole = null;
+    $('previewTable').classList.remove('painting');
+    saveViewSoon();
+    renderChips();
+    renderGrid();
+    return true;
+  }
+
+  /* ----------------------------------------------------- preview grid */
 
   function renderSchedule() {
     const s = state.schedule;
     const has = !!(s && s.headers && s.headers.length);
-    $('mappingCard').hidden = !has;
     $('previewCard').hidden = !has;
-    $('sheetPickerWrap').hidden = !(has && s.sheetNames.length > 1);
+    $('parseOptions').hidden = !s;
+    if (!s) return;
+
+    // Sheet picker
+    const picker = $('sheetPicker');
+    picker.innerHTML = '';
+    for (const name of s.sheetNames) {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      picker.appendChild(opt);
+    }
+    picker.value = s.sheet;
+    picker.parentElement.hidden = s.sheetNames.length < 2;
+
+    // Header row picker: Auto + the sheet's first rows
+    const hp = $('headerRowPicker');
+    hp.innerHTML = '';
+    const auto = document.createElement('option');
+    auto.value = '';
+    auto.textContent = 'Auto-detect';
+    hp.appendChild(auto);
+    const maxRow = Math.max(Math.min(s.sheetRowCount || 20, 20), s.headerRow + 1);
+    for (let i = 0; i < maxRow; i++) {
+      const opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = `Row ${i + 1}`;
+      hp.appendChild(opt);
+    }
+    hp.value = String(s.headerRow);
+
     if (!has) return;
-
-    if (s.sheetNames.length > 1) {
-      const picker = $('sheetPicker');
-      picker.innerHTML = '';
-      for (const name of s.sheetNames) {
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        picker.appendChild(opt);
-      }
-      picker.value = s.sheet;
-    }
-
-    const m = state.config.mapping;
-    fillColumnSelect($('mapDate'), m.dateCol);
-    fillColumnSelect($('mapStart'), m.startCol);
-    fillColumnSelect($('mapEnd'), m.endCol);
-    fillColumnSelect($('mapMachine'), m.machineCol);
-    fillColumnSelect($('mapTitle'), m.titleCol);
-    $('mapDateFormat').value = m.dateFormat || 'auto';
-
-    const wrap = $('displayCols');
-    wrap.innerHTML = '';
-    for (const h of s.headers) {
-      const label = document.createElement('label');
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.value = h;
-      cb.checked = state.config.displayColumns.includes(h);
-      label.appendChild(cb);
-      label.appendChild(document.createTextNode(' ' + h));
-      wrap.appendChild(label);
-    }
-
-    $('previewMeta').textContent =
-      `“${s.filename}” — sheet “${s.sheet}” — ${s.rows.length} rows — uploaded ${new Date(s.uploadedAt).toLocaleString()}`;
-    const table = $('previewTable');
-    table.innerHTML = '';
-    const thead = document.createElement('thead');
-    const headRow = document.createElement('tr');
-    for (const h of s.headers) {
-      const th = document.createElement('th');
-      th.textContent = h;
-      headRow.appendChild(th);
-    }
-    thead.appendChild(headRow);
-    table.appendChild(thead);
-    const tbody = document.createElement('tbody');
-    for (const row of s.rows.slice(0, 50)) {
-      const tr = document.createElement('tr');
-      for (const h of s.headers) {
-        const td = document.createElement('td');
-        td.textContent = String(row[h] ?? '');
-        tr.appendChild(td);
-      }
-      tbody.appendChild(tr);
-    }
-    table.appendChild(tbody);
+    $('mapDateFormat').value = state.config.mapping.dateFormat || 'auto';
+    renderChips();
+    renderGrid();
   }
 
-  $('saveMappingBtn').addEventListener('click', async () => {
-    const displayColumns = [...$('displayCols').querySelectorAll('input:checked')]
-      .map((cb) => cb.value);
-    try {
-      const body = await api('/api/mapping', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mapping: {
-            dateCol: $('mapDate').value,
-            startCol: $('mapStart').value,
-            endCol: $('mapEnd').value,
-            machineCol: $('mapMachine').value,
-            titleCol: $('mapTitle').value,
-            dateFormat: $('mapDateFormat').value
-          },
-          displayColumns
-        })
+  function renderSummary() {
+    const s = state.schedule;
+    const shownRows = s.rows.length - excluded.size;
+    $('selectionSummary').textContent =
+      `Showing ${state.config.displayColumns.length} of ${s.headers.length} columns · ` +
+      `${shownRows} of ${s.rows.length} rows on screens`;
+  }
+
+  function renderGrid() {
+    const s = state.schedule;
+    const cfg = state.config;
+    const scroll = document.querySelector('.table-scroll.tall');
+    const keepTop = scroll ? scroll.scrollTop : 0;
+    const keepLeft = scroll ? scroll.scrollLeft : 0;
+
+    const table = $('previewTable');
+    table.innerHTML = '';
+    const colShown = (h) => cfg.displayColumns.includes(h);
+
+    /* header */
+    const thead = document.createElement('thead');
+    const tr = document.createElement('tr');
+
+    const corner = document.createElement('th');
+    corner.className = 'corner';
+    const allCb = document.createElement('input');
+    allCb.type = 'checkbox';
+    allCb.title = 'Show / hide all rows';
+    allCb.checked = excluded.size === 0;
+    allCb.addEventListener('change', () => {
+      excluded = allCb.checked ? new Set() : new Set(s.rows.map((_, i) => i));
+      saveViewSoon();
+      renderGrid();
+    });
+    corner.appendChild(allCb);
+    tr.appendChild(corner);
+
+    s.headers.forEach((h) => {
+      const th = document.createElement('th');
+      const role = roleFor(h);
+      th.className = (role ? role.cls : '') + (colShown(h) ? '' : ' col-off');
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.title = 'Show this column on screens';
+      cb.checked = colShown(h);
+      cb.addEventListener('click', (e) => e.stopPropagation());
+      cb.addEventListener('change', () => {
+        cfg.displayColumns = cb.checked
+          ? [...cfg.displayColumns, h].filter((c, i, a) => a.indexOf(c) === i)
+          : cfg.displayColumns.filter((c) => c !== h);
+        // Keep spreadsheet order.
+        cfg.displayColumns.sort((a, b) => s.headers.indexOf(a) - s.headers.indexOf(b));
+        saveViewSoon();
+        renderGrid();
       });
-      state.config = body.config;
-      setStatus('mappingStatus', 'Saved. Screens updated.', 'ok');
-    } catch (err) {
-      setStatus('mappingStatus', err.message, 'error');
+      th.appendChild(cb);
+
+      const name = document.createElement('span');
+      name.className = 'col-name';
+      name.textContent = h;
+      th.appendChild(name);
+
+      if (role) {
+        const tag = document.createElement('span');
+        tag.className = 'role-tag ' + role.cls;
+        tag.textContent = role.label;
+        tag.title = 'Click to remove this tag';
+        tag.addEventListener('click', (e) => {
+          e.stopPropagation();
+          cfg.mapping[role.key] = '';
+          saveViewSoon();
+          renderChips();
+          renderGrid();
+        });
+        th.appendChild(tag);
+      }
+
+      th.addEventListener('click', () => assignRole(h));
+      tr.appendChild(th);
+    });
+    thead.appendChild(tr);
+    table.appendChild(thead);
+
+    /* body */
+    const tbody = document.createElement('tbody');
+    s.rows.slice(0, PREVIEW_MAX).forEach((row, i) => {
+      const trb = document.createElement('tr');
+      if (excluded.has(i)) trb.className = 'row-off';
+
+      const tdCb = document.createElement('td');
+      tdCb.className = 'row-check';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.title = 'Show this row on screens';
+      cb.checked = !excluded.has(i);
+      cb.addEventListener('change', () => {
+        if (cb.checked) excluded.delete(i); else excluded.add(i);
+        trb.classList.toggle('row-off', !cb.checked);
+        allCb.checked = excluded.size === 0;
+        saveViewSoon();
+        renderSummary();
+      });
+      tdCb.appendChild(cb);
+      trb.appendChild(tdCb);
+
+      s.headers.forEach((h) => {
+        const td = document.createElement('td');
+        const role = roleFor(h);
+        td.className = (role ? role.cls : '') + (colShown(h) ? '' : ' col-off');
+        td.textContent = String(row[h] ?? '');
+        td.addEventListener('click', () => assignRole(h));
+        trb.appendChild(td);
+      });
+      tbody.appendChild(trb);
+    });
+    table.appendChild(tbody);
+
+    if (s.rows.length > PREVIEW_MAX) {
+      const note = document.createElement('tfoot');
+      const trf = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = s.headers.length + 1;
+      td.className = 'muted';
+      td.textContent = `Preview shows the first ${PREVIEW_MAX} of ${s.rows.length} rows. All ticked rows still appear on screens.`;
+      trf.appendChild(td);
+      note.appendChild(trf);
+      table.appendChild(note);
     }
-  });
+
+    renderSummary();
+    if (scroll) { scroll.scrollTop = keepTop; scroll.scrollLeft = keepLeft; }
+  }
 
   /* ---------------------------------------------------------- screens */
 
@@ -481,6 +659,7 @@
   async function init() {
     const body = await api('/api/admin-state');
     state = body;
+    excluded = new Set((state.schedule && state.schedule.excluded) || []);
     $('loginView').hidden = true;
     $('adminView').hidden = false;
     renderSchedule();

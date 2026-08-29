@@ -6,9 +6,12 @@ uploaded — no touching the TVs.
 
 ## What it does
 
-- **Excel in, dashboard out** — upload your existing `.xlsx` / `.xls` / `.csv`
-  schedule in the admin panel. No fixed template: you tell the dashboard which
-  columns hold the date, start time and end time, and which columns to display.
+- **Excel in, dashboard out** — drag & drop your existing `.xlsx` / `.xls` /
+  `.csv` schedule into the admin panel. No fixed template: you tag the columns
+  directly on the sheet preview (click a tag, then click the column) to say
+  which one is the date, start/end time, machine and product, and tick exactly
+  which columns and rows should appear on screens. A header-row picker handles
+  sheets where the titles aren't on the first row.
 - **Screen fleet** — create one entry per physical screen (e.g. *Packing Line 1*,
   *Goods In*). Each gets its own URL to open on that TV. Screens can be filtered
   to a line/area column so each one only shows what's relevant there.
@@ -52,7 +55,9 @@ npm run sample       # generates sample/sample-schedule.xlsx to try it with
 ## Setting up the warehouse screens
 
 1. Open `https://your-app.up.railway.app/admin`, upload a schedule, and check
-   the column setup (date / start / end columns are auto-guessed).
+   the column tags on the preview (date / start / end / machine / product are
+   auto-guessed — click a tag, then a column, to correct them). Untick any
+   columns or rows you don't want on screens.
 2. In **Screens**, add a screen per TV, set its filter (e.g. `Line = Line 1`),
    and copy its URL.
 3. On each TV's device (smart TV browser, Chromecast, Raspberry Pi, mini PC…),

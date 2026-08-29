@@ -32,58 +32,49 @@
       <section id="tab-schedule" class="tab-panel">
         <div class="card">
           <h2>Upload production schedule</h2>
-          <p class="hint">Upload the Excel sheet (.xlsx / .xls / .csv) for the day or week.
+          <p class="hint">Drop in the Excel sheet (.xlsx / .xls / .csv) for the day or week.
              Every screen updates the moment the upload finishes.</p>
-          <div class="upload-row">
-            <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.csv">
-            <button id="uploadBtn" class="btn primary">Upload</button>
+          <div id="dropZone" class="drop-zone">
+            <p class="drop-title">Drag &amp; drop your Excel file here</p>
+            <p class="muted">or</p>
+            <button id="browseBtn" class="btn" type="button">Choose a file…</button>
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.csv" hidden>
           </div>
           <p id="uploadStatus" class="status-line"></p>
-          <div id="sheetPickerWrap" hidden>
-            <label>Worksheet:
+          <div class="upload-row" id="parseOptions" hidden>
+            <label class="inline">Worksheet
               <select id="sheetPicker"></select>
             </label>
+            <label class="inline">Header row
+              <select id="headerRowPicker"></select>
+            </label>
+            <span class="muted">Wrong table? Pick the sheet and the row your column titles are on.</span>
           </div>
         </div>
 
-        <div class="card" id="mappingCard" hidden>
-          <h2>Column setup</h2>
-          <p class="hint">Tell the dashboard which columns hold the date and times, and tick the
-             columns to show on screens by default.</p>
-          <div class="mapping-grid">
-            <label>Date column
-              <select id="mapDate"></select>
-            </label>
-            <label>Start time column
-              <select id="mapStart"></select>
-            </label>
-            <label>End time column
-              <select id="mapEnd"></select>
-            </label>
-            <label>Machine / line column
-              <select id="mapMachine"></select>
-            </label>
-            <label>Item / product column
-              <select id="mapTitle"></select>
-            </label>
-            <label>Date format
+        <div class="card" id="previewCard" hidden>
+          <h2>Choose what shows on the dashboard</h2>
+          <p class="hint">
+            <strong>1.</strong> Click a tag below, then click a column in the sheet to tell the
+            dashboard which column is which.&nbsp;
+            <strong>2.</strong> Use the checkboxes to pick which columns and rows appear on screens.
+            Changes save automatically and update every screen.
+          </p>
+          <div class="role-chips" id="roleChips"></div>
+          <div class="preview-toolbar">
+            <label class="inline">Date format
               <select id="mapDateFormat">
                 <option value="auto">Auto-detect</option>
                 <option value="DMY">Day / Month / Year</option>
                 <option value="MDY">Month / Day / Year</option>
               </select>
             </label>
+            <span id="selectionSummary" class="muted"></span>
+            <span id="mappingStatus" class="status-line"></span>
           </div>
-          <h3>Columns shown on screens (default)</h3>
-          <div id="displayCols" class="check-grid"></div>
-          <button id="saveMappingBtn" class="btn primary">Save column setup</button>
-          <span id="mappingStatus" class="status-line"></span>
-        </div>
-
-        <div class="card" id="previewCard" hidden>
-          <h2>Data preview</h2>
-          <p class="hint" id="previewMeta"></p>
-          <div class="table-scroll"><table id="previewTable"></table></div>
+          <div class="table-scroll tall">
+            <table id="previewTable" class="select-grid"></table>
+          </div>
         </div>
       </section>
 

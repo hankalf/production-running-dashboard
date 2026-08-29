@@ -126,29 +126,36 @@ function normCell(v) {
   return String(v).trim();
 }
 
-function parseWorkbookFile(filePath, sheetName) {
+function parseWorkbookFile(filePath, sheetName, headerRow) {
   const wb = XLSX.readFile(filePath, { cellDates: true });
   const sheetNames = wb.SheetNames;
   const sheet = sheetNames.includes(sheetName) ? sheetName : sheetNames[0];
+  // blankrows kept so row numbers line up with what Excel shows.
   const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sheet], {
     header: 1,
     defval: '',
-    blankrows: false
+    blankrows: true
   });
 
-  // First row with at least 2 non-empty cells is the header row.
-  let headerIdx = aoa.findIndex(
-    (r) => r.filter((c) => String(c).trim() !== '').length >= 2
-  );
-  if (headerIdx < 0) headerIdx = 0;
+  // Header row: caller's choice (0-based), or the first row with at
+  // least 2 non-empty cells.
+  let headerIdx;
+  if (Number.isInteger(headerRow) && headerRow >= 0 && headerRow < aoa.length) {
+    headerIdx = headerRow;
+  } else {
+    headerIdx = aoa.findIndex(
+      (r) => r.filter((c) => String(c).trim() !== '').length >= 2
+    );
+    if (headerIdx < 0) headerIdx = 0;
+  }
 
-  const headerRow = (aoa[headerIdx] || []).map((h, i) => {
+  const headerCells = (aoa[headerIdx] || []).map((h, i) => {
     const name = String(normCell(h)).trim();
     return name || `Column ${i + 1}`;
   });
   // De-duplicate header names so rows keyed by header don't collide.
   const seen = {};
-  const headers = headerRow.map((h) => {
+  const headers = headerCells.map((h) => {
     seen[h] = (seen[h] || 0) + 1;
     return seen[h] > 1 ? `${h} (${seen[h]})` : h;
   });
@@ -161,7 +168,7 @@ function parseWorkbookFile(filePath, sheetName) {
     headers.forEach((h, c) => { row[h] = normCell(cells[c]); });
     rows.push(row);
   }
-  return { sheetNames, sheet, headers, rows };
+  return { sheetNames, sheet, headers, rows, headerRow: headerIdx, sheetRowCount: aoa.length };
 }
 
 // Guess column roles from header names after an upload.
@@ -252,6 +259,7 @@ app.post('/api/upload', requireAuth, upload.single('file'), (req, res) => {
   }
   const schedule = {
     ...parsed,
+    excluded: [],
     filename: req.file.originalname,
     uploadedAt: new Date().toISOString()
   };
@@ -275,11 +283,12 @@ app.post('/api/select-sheet', requireAuth, (req, res) => {
   }
   let parsed;
   try {
-    parsed = parseWorkbookFile(stored, req.body.sheet);
+    const headerRow = Number.isInteger(req.body.headerRow) ? req.body.headerRow : undefined;
+    parsed = parseWorkbookFile(stored, req.body.sheet, headerRow);
   } catch (e) {
     return res.status(400).json({ error: e.message });
   }
-  const schedule = { ...prev, ...parsed };
+  const schedule = { ...prev, ...parsed, excluded: [] };
   setSchedule(schedule);
   const cfg = getConfig();
   cfg.mapping = guessMapping(parsed.headers, cfg.mapping);
@@ -292,12 +301,19 @@ app.post('/api/select-sheet', requireAuth, (req, res) => {
 
 app.post('/api/mapping', requireAuth, (req, res) => {
   const cfg = getConfig();
-  const { mapping, displayColumns } = req.body;
+  const { mapping, displayColumns, excluded } = req.body;
   if (mapping) cfg.mapping = { ...cfg.mapping, ...mapping };
-  if (Array.isArray(displayColumns)) cfg.displayColumns = displayColumns;
+  if (Array.isArray(displayColumns)) cfg.displayColumns = displayColumns.map(String);
   setConfig(cfg);
+  let schedule = getSchedule();
+  if (Array.isArray(excluded) && schedule) {
+    schedule.excluded = [...new Set(
+      excluded.filter((i) => Number.isInteger(i) && i >= 0 && i < schedule.rows.length)
+    )].sort((a, b) => a - b);
+    setSchedule(schedule);
+  }
   broadcast('update');
-  res.json({ config: cfg });
+  res.json({ config: cfg, schedule });
 });
 
 app.post('/api/branding', requireAuth, upload.single('logo'), (req, res) => {
@@ -387,7 +403,8 @@ app.get('/api/screen-data/:slug', (req, res) => {
   if (!screen) return res.status(404).json({ error: 'Unknown screen. Check the URL or set it up in the admin panel.' });
 
   const schedule = getSchedule();
-  let rows = schedule ? schedule.rows : [];
+  const excluded = new Set((schedule && schedule.excluded) || []);
+  let rows = schedule ? schedule.rows.filter((_, i) => !excluded.has(i)) : [];
   if (screen.filterCol && screen.filterValues.length) {
     rows = rows.filter((r) =>
       screen.filterValues.includes(String(r[screen.filterCol] ?? '')));
