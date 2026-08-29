@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard Admin</title>
+  <link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+  <div id="loginView" hidden>
+    <form id="loginForm" class="login-card">
+      <h1>Dashboard Admin</h1>
+      <p>Enter the admin password to continue.</p>
+      <input type="password" id="loginPassword" placeholder="Password" autofocus>
+      <button type="submit" class="btn primary">Log in</button>
+      <p id="loginError" class="error" hidden></p>
+    </form>
+  </div>
+
+  <div id="adminView" hidden>
+    <header class="admin-header">
+      <h1>Production Dashboard <span>Admin</span></h1>
+      <nav id="tabs">
+        <button data-tab="schedule" class="tab active">Schedule</button>
+        <button data-tab="screens" class="tab">Screens</button>
+        <button data-tab="branding" class="tab">Branding</button>
+      </nav>
+    </header>
+
+    <main>
+      <!-- ============================================= Schedule tab -->
+      <section id="tab-schedule" class="tab-panel">
+        <div class="card">
+          <h2>Upload production schedule</h2>
+          <p class="hint">Upload the Excel sheet (.xlsx / .xls / .csv) for the day or week.
+             Every screen updates the moment the upload finishes.</p>
+          <div class="upload-row">
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.csv">
+            <button id="uploadBtn" class="btn primary">Upload</button>
+          </div>
+          <p id="uploadStatus" class="status-line"></p>
+          <div id="sheetPickerWrap" hidden>
+            <label>Worksheet:
+              <select id="sheetPicker"></select>
+            </label>
+          </div>
+        </div>
+
+        <div class="card" id="mappingCard" hidden>
+          <h2>Column setup</h2>
+          <p class="hint">Tell the dashboard which columns hold the date and times, and tick the
+             columns to show on screens by default.</p>
+          <div class="mapping-grid">
+            <label>Date column
+              <select id="mapDate"></select>
+            </label>
+            <label>Start time column
+              <select id="mapStart"></select>
+            </label>
+            <label>End time column
+              <select id="mapEnd"></select>
+            </label>
+            <label>Machine / line column
+              <select id="mapMachine"></select>
+            </label>
+            <label>Item / product column
+              <select id="mapTitle"></select>
+            </label>
+            <label>Date format
+              <select id="mapDateFormat">
+                <option value="auto">Auto-detect</option>
+                <option value="DMY">Day / Month / Year</option>
+                <option value="MDY">Month / Day / Year</option>
+              </select>
+            </label>
+          </div>
+          <h3>Columns shown on screens (default)</h3>
+          <div id="displayCols" class="check-grid"></div>
+          <button id="saveMappingBtn" class="btn primary">Save column setup</button>
+          <span id="mappingStatus" class="status-line"></span>
+        </div>
+
+        <div class="card" id="previewCard" hidden>
+          <h2>Data preview</h2>
+          <p class="hint" id="previewMeta"></p>
+          <div class="table-scroll"><table id="previewTable"></table></div>
+        </div>
+      </section>
+
+      <!-- ============================================== Screens tab -->
+      <section id="tab-screens" class="tab-panel" hidden>
+        <div class="card">
+          <h2>Screen fleet</h2>
+          <p class="hint">Create one entry per physical screen. Open each screen's URL in a
+             browser on that TV / display device (full screen it with F11 or kiosk mode).
+             Filter a screen to a line or area so it only shows what's relevant there.</p>
+          <div class="upload-row">
+            <input type="text" id="newScreenName" placeholder="Screen name, e.g. Packing Line 1">
+            <button id="addScreenBtn" class="btn primary">Add screen</button>
+          </div>
+        </div>
+        <div id="screenList"></div>
+      </section>
+
+      <!-- ============================================= Branding tab -->
+      <section id="tab-branding" class="tab-panel" hidden>
+        <div class="card">
+          <h2>Branding</h2>
+          <div class="mapping-grid">
+            <label>Company / site name
+              <input type="text" id="brandName" maxlength="80">
+            </label>
+            <label>Accent colour
+              <input type="color" id="brandColor">
+            </label>
+            <label>Screen theme
+              <select id="brandTheme">
+                <option value="dark">Dark (best for TVs)</option>
+                <option value="light">Light</option>
+              </select>
+            </label>
+            <label class="check-label">
+              <input type="checkbox" id="brandClock" checked> Show clock on screens
+            </label>
+          </div>
+          <h3>Logo</h3>
+          <div class="upload-row">
+            <img id="brandLogoPreview" class="logo-preview" alt="" hidden>
+            <input type="file" id="logoInput" accept="image/*">
+            <button id="removeLogoBtn" class="btn danger" hidden>Remove logo</button>
+          </div>
+          <button id="saveBrandingBtn" class="btn primary">Save branding</button>
+          <span id="brandingStatus" class="status-line"></span>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/schedule-utils.js"></script>
+  <script src="/admin.js"></script>
+</body>
+</html>

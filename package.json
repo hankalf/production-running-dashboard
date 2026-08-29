@@ -1,0 +1,19 @@
+{
+  "name": "production-running-dashboard",
+  "version": "1.0.0",
+  "description": "Warehouse production schedule dashboard - upload an Excel schedule, display what's running now on screens across the warehouse.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "sample": "node scripts/make-sample.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "xlsx": "^0.18.5"
+  },
+  "license": "MIT"
+}

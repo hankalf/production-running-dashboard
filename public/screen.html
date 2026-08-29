@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Production Screen</title>
+  <link rel="stylesheet" href="/screen.css">
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand">
+      <img id="logo" alt="" hidden>
+      <div class="brand-text">
+        <div id="companyName"></div>
+        <div id="screenName"></div>
+      </div>
+    </div>
+    <div class="top-right">
+      <div id="clock" class="clock"></div>
+      <div id="dateLine" class="date-line"></div>
+    </div>
+  </header>
+
+  <main id="content">
+    <div id="message" class="message" hidden></div>
+    <div id="board"></div>
+  </main>
+
+  <footer id="footbar">
+    <div id="updatedLine"></div>
+    <div id="pageDots"></div>
+    <div id="connState"></div>
+  </footer>
+
+  <script src="/schedule-utils.js"></script>
+  <script src="/screen.js"></script>
+</body>
+</html>

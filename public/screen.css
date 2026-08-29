@@ -1,0 +1,278 @@
+/* Full-screen warehouse display. Sized with viewport units so it reads
+ * well on TVs from a distance, in dark or light theme. */
+
+:root {
+  --accent: #f59e0b;
+  --bg: #0b0f14;
+  --surface: #151b23;
+  --surface-2: #1d2530;
+  --text: #f2f5f9;
+  --muted: #93a1b3;
+  --line: #2a3441;
+  --running: #22c55e;
+  --done: #64748b;
+}
+
+body[data-theme="light"] {
+  --bg: #f1f4f8;
+  --surface: #ffffff;
+  --surface-2: #e8edf3;
+  --text: #101720;
+  --muted: #5b6875;
+  --line: #d5dde6;
+  --done: #8a97a5;
+}
+
+* { box-sizing: border-box; margin: 0; }
+
+[hidden] { display: none !important; }
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  cursor: none;
+}
+
+/* ------------------------------------------------------------- header */
+
+#topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2vw;
+  padding: 1.2vh 2vw;
+  background: var(--surface);
+  border-bottom: 0.45vh solid var(--accent);
+  flex: 0 0 auto;
+}
+
+.brand { display: flex; align-items: center; gap: 1.2vw; min-width: 0; }
+
+#logo { height: 6.5vh; max-width: 20vw; object-fit: contain; }
+
+#companyName {
+  font-size: 3.2vh;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+#screenName {
+  font-size: 2.2vh;
+  color: var(--accent);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.top-right { text-align: right; }
+
+.clock {
+  font-size: 5.2vh;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+
+.date-line { font-size: 2vh; color: var(--muted); }
+
+/* -------------------------------------------------------------- board */
+
+#content {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 1.6vh 2vw;
+  display: flex;
+  flex-direction: column;
+}
+
+#board { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+
+table.board {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table.board th {
+  text-align: left;
+  font-size: 2vh;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  padding: 0.8vh 1vw;
+  border-bottom: 0.3vh solid var(--line);
+}
+
+table.board td {
+  font-size: 3vh;
+  font-weight: 600;
+  padding: 1.4vh 1vw;
+  border-bottom: 0.15vh solid var(--line);
+  background: var(--surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 28vw;
+}
+
+table.board td.time-cell { font-variant-numeric: tabular-nums; width: 1%; }
+
+tr.status-running td { background: var(--surface-2); }
+tr.status-running td:first-child { box-shadow: inset 0.6vw 0 0 var(--running); }
+tr.status-done td { color: var(--done); font-weight: 500; }
+
+.status-chip {
+  display: inline-block;
+  font-size: 1.9vh;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 0.5vh 0.9vw;
+  border-radius: 0.8vh;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.status-chip.running { background: var(--running); color: #04150a; }
+.status-chip.upcoming { background: var(--accent); color: #140d01; }
+.status-chip.done { background: var(--line); color: var(--muted); }
+
+/* ------------------------------------------------- machine columns */
+
+.machine-grid {
+  display: grid;
+  gap: 1.4vw;
+  height: 100%;
+  align-items: start;
+}
+
+.machine-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2vh;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.machine-head {
+  background: var(--surface-2);
+  border-top: 0.5vh solid var(--accent);
+  border-radius: 0.8vh;
+  text-align: center;
+  font-size: 2.8vh;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1vh 0.5vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.job-card {
+  background: var(--surface);
+  border: 0.15vh solid var(--line);
+  border-left: 0.6vw solid var(--line);
+  border-radius: 0.8vh;
+  padding: 1.1vh 1vw;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5vh;
+}
+
+.job-card.status-running {
+  border-color: var(--running);
+  border-left-color: var(--running);
+  background: var(--surface-2); /* fallback for older TV browsers */
+  background: color-mix(in srgb, var(--running) 14%, var(--surface));
+}
+
+.job-card.status-upcoming { border-left-color: var(--accent); }
+
+.job-card.status-done { opacity: 0.45; }
+
+.job-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8vw;
+}
+
+.job-time {
+  font-size: 2.4vh;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.job-card.status-running .job-time { color: var(--text); }
+
+.job-title {
+  font-size: 2.9vh;
+  font-weight: 700;
+  line-height: 1.15;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.job-meta {
+  font-size: 1.9vh;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.machine-empty, .machine-more {
+  text-align: center;
+  color: var(--muted);
+  font-size: 2.2vh;
+  padding: 1.5vh 0;
+}
+
+/* ------------------------------------------------------------- states */
+
+.message {
+  margin: auto;
+  text-align: center;
+  color: var(--muted);
+  font-size: 3.4vh;
+  max-width: 70vw;
+  line-height: 1.5;
+}
+
+.message strong { color: var(--text); display: block; font-size: 4.5vh; margin-bottom: 1.5vh; }
+
+/* ------------------------------------------------------------- footer */
+
+#footbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8vh 2vw;
+  font-size: 1.8vh;
+  color: var(--muted);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+
+#pageDots { display: flex; gap: 0.6vw; }
+
+.dot {
+  width: 1.4vh; height: 1.4vh;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+.dot.active { background: var(--accent); }
+
+#connState.offline { color: #ef4444; font-weight: 700; }
